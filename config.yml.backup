@@ -1,0 +1,428 @@
+# Flexget (http://www.flexget.com) configuration file.
+#
+# Created by: Jeff Wilson <jeff@jeffalwilson.com>
+# Available from: https://github.com/atlanta800/dotfiles
+#
+# For various reasons I've moved some settings into a private subfolder. The
+# files are:
+#   * private/global.yml
+#   * private/movies-global.yml
+#   * private/tv-global.yml
+# These files are not necessary to use this cofiguration, simply remove the
+# 'include' plugin references and you should be fine. You'll also want to check
+# for a few places that I've commented out sections that I've moved to these
+# config files.
+#
+# == Rar-unpacking ==
+# My entire setup results in a single video file (.mkv, .mp4, etc) in the final
+# destination with a nice name regardless if it's packed in a rar or not.
+# Here's the gist of how it works:
+#   1. Flexget accepts the torrent regardless if it's a rar-pack or not
+#   2. My custom content_sort plugin changes the move_done value if the torrent
+#       contains a .rar
+#   3. The torrent is added to Deluge
+#   4. Deluge is configured with the Execute (http://dev.deluge-torrent.org/wiki/Plugins/Execute)
+#       plugin to run my deluge_torrent_complete script (also available in this
+#       repository) when any torrent is done downloading
+#   5. deluge_torrent_complete checks if the torrent is located in the
+#       directory we set in step #2, if not it skips to the last step
+#   6. deluge_torrent_complete unpacks the first .rar file it finds in the
+#       torrent to a 'staging' location
+#   7. deluge_torrent_complete calls flexget with a completely separate config,
+#       'sorting.yml' (also available in this repository)
+#   8. The 'sorting.yml' config checks for files in the 'staging' location from
+#       step #6 and renames and moves the files to their appropriate final
+#       location
+#   9. deluge_torrent_complete tells my XBMC server to update the library (scan
+#       for new files)
+#
+
+presets:
+
+  global:
+    deluge:
+      user: chiru
+      pass: XXXXXXXXX
+      ratio: 0.25
+      removeatratio: yes
+    #transmission:
+    #  enabled: yes
+    #  host: localhost
+    #  port: 9091
+    #  username: transmission
+    #  password: transmission
+    #  ratio: 0.10
+    # Make there's 50GB free before adding more downloads
+    free_space:
+      path: /media/SERIES
+      space: 50000
+    # Make sure all filenames are Windows safe (for samba)
+    pathscrub: windows
+    # Most of these are the results of problem torrents I kept seeing still pop up, so I wholesale blocked them
+    # RegExr (http://www.gskinner.com/RegExr/) is a great tool for testing regexes
+    regexp:
+      reject:
+        - (s|d)ub(s|bed)?\b: {from: title}                    # Block any subbed/dubbed/etc videos
+        - \b(duo|tri|quadri|tetra|penta)logy\b: {from: title} # Block series, only accept one at a time
+        - \b3-?D\b: {from: title}                             # I don't have any 3D displays
+        - \btrailer\b: {from: title}                          # I've gotten a few trailers that matched as movies. VERY annoying
+        - \bR5\b: {from: title}                               # The following are poor quality types that somehow got through the quality
+        - \bWEBSCR\b: {from: title}                           # features usually due to the title including a keyword like "720p" as well
+        - \bscreener\b: {from: title}
+        - \bTS\b: {from: title}
+        - \bCam\b: {from: title}
+        - '{C_P}': {from: title}                              # The following are groups with poor quality releases
+        - TrTd TeaM: {from: title}
+        - \[TNTVillage\]: {from: title}
+        - \[facepalm\]: {from: title}
+        - \bASAP\b: {from: title}
+        - YIFI: {from: title}
+    # Require at least 40 seeds of any torrent
+    torrent_alive:
+      min_seeds: 10
+      reject_for: 3 hours
+    # Filter by filenames. Allow multiple video types and rar packs (but note if there is just a
+    # single .rar file it won't be accepted)
+    content_filter:
+      require:
+        - '*.avi'
+        - '*.mkv'
+        - '*.mpg'
+        - '*.mp4'
+      reject:
+        - 'password.txt'
+        - '*.wmv'
+        - '*.rar'
+    # Limit the frequency of requests to domains so they don't complain about
+    # using a bot
+    domain_delay:
+      bt-chat.com: 5 seconds
+      torrentz.eu: 5 seconds
+    # The Pirate Bay ssl certs always fail
+    verify_ssl_certificates: no
+    # Ignore torrents with only magnet links, they don't play well with BT-Guard
+    magnets: yes
+    # A couple of people didn't change this when they tried out my configs, so I
+    # moved it to private/global.yml, uncomment here to get email notificians
+    #email:
+    #  from: user@your.domain
+    #  to: your@email.address
+    # Deluge is configured in my private configs, but I'm leaving this for
+    # clarity and completeness uncomment it so that your torrents are added to
+    # deluge (or replace it with your target).
+    #deluge:
+    # # Ignore all but the file that is >90% of the torrent if it exists
+    # # You will most likely want to combine this with the 'DeletePartials' 
+    # # Deluge plugin
+    #  main_file_only: yes
+
+
+  # This preset is a "global" preset for all TV-related tasks.
+  # We keep all of the RSS feeds that list tv-related torrents here
+  # as well as where to check existing shows.
+  tv-global:
+    #include: [ private/tv-global.yml ]
+    # This is a TON of feeds, you probably don't need so many, but why not?
+    inputs:
+      - rss: { url: 'http://www.torlock.com/television/rss.xml', silent: yes }  # TorLock (TV)
+      - rss: { url: 'http://torrentz.eu/feed_verified?q=tv', silent: yes }      # Torrentz (Verified only, TV)
+      - rss: { url: 'http://ezrss.it/feed/', silent: yes }                      # EZRSS
+      - rss: { url: 'http://showrss.karmorra.info/feeds/all.rss', silent: yes } # Karmorra (All)
+      - rss: { url: 'http://rss.bt-chat.com/?group=3', silent: yes }            # BT-Chat (EZTV)
+      - rss: { url: 'http://rss.thepiratebay.is/208', silent: yes }             # The Pirate Bay (Highres - TV shows)
+      - rss: { url: 'http://kat.ph/tv/?rss=1', silent: yes }                    # Kat.ph (TV Shows)
+      - rss: { url: 'http://kat.ph/bookmarks/rss/personal/7e5c763d30fa00d696849918b32519fe/', silent: yes }       # kat.ph personal
+    # Impose reasonable size constraints
+    content_size:
+      max: 5000
+      min: 20
+    # Prevent from downloading shows that were aquired manually
+    # or are currently downloading
+    exists_series:
+      - "/media/SERIES/VIDEO/Series/"
+      - "/var/lib/deluged/"
+    # Look up info on TheTVDB.com to fill in extra info
+    thetvdb_lookup: yes
+    # Add accepted entries to Deluge and make sure they end up in the correct
+    # folder with a nice name
+    set:
+      content_filename: "{{ series_name|replace('/', '_')|replace(':', ' -') }} {{ series_season }}x{{ series_episode|pad(2) }} - {{ tvdb_ep_name }}"
+      main_file_only: yes
+      label: tv
+
+
+  # These are the shows I regularly watch
+  tv-my_shows:
+    series:
+      settings:
+        all:
+          target: 720p-1080p hdtv+ h264+ dd5.1+
+          timeframe: 24 hours
+          quality: hdtv+
+          
+    # I've broken out my series lists into a seperate yml to clean up my config
+    #include: [ series.yml ]
+    # Add accepted entries to Deluge, queue them to the top and make sure they
+    # end up in the correct folder
+    set:
+      #path: /media/SERIES/VIDEO/Series/{{ series_name|replace('/', '_')|replace(':', ' -') }}/T.{{ series_season }}
+      movedone: >
+        "/media/SERIES/VIDEO/Series/{{ series_name|replace('/', '_')|replace(':', ' -') }}/{% if series_id_type == 'ep' %}T.{{ tvdb_season|default(series_season) }}/{% endif %}"
+      queuetotop: yes
+    # This is a custom plugin, it is part of my rar-unpacking method,
+    # it changes 'movedone' based on the regexp in the key
+    #content_sort:
+    #  '*.rar': '/home/deluge/downloads/completed/tv_shows/'
+
+
+  # I'm always up for new shows, but some I genres I just can't stand. This
+  # preset grabs all of the premieres except for some genres
+  tv-premieres:
+    # The entry has to have the tvdb_genres field so I can filter by it
+    require_field:
+      - tvdb_genres
+      - tvdb_first_air_date
+    # Block these genres if they exist in the list of tvdb_genres at all
+    regexp:
+      reject:
+        - documentary: {from: tvdb_genres}
+        - talk show: {from: tvdb_genres}
+        - game show: {from: tvdb_genres}
+        - reality: {from: tvdb_genres}
+        - children: {from: tvdb_genres}
+        - home and garden: {from: tvdb_genres}
+    if:
+      # Block these genres only if they are the ONLY genre listed in
+      # tvdb_genres. For example, this will not block a show that's both
+      # "Comedy" and "Drama" but it will block a show that is just "Drama"
+      #- "tvdb_genres == ['Drama']": reject
+      # Block premieres that weren't within the last 60 days
+      - tvdb_first_air_date != None and tvdb_first_air_date < now - timedelta(days=60): reject
+    # Accept all series permieres
+    series_premiere:
+      target: 720p-1080p hdtv+ h264+ dd5.1+
+      timeframe: 24 hours
+      quality: hdtv+
+
+    # Add to deluge, but don't queue to top (My_TV_Shows are more important)
+    # and put in a different location
+    set:
+      movedone: "/media/SERIES/VIDEO/Series/NUEVAS/{{ series_name|replace('/', '_')|replace(':', ' -') }}/T.{{ tvdb_season|default(series_season) }}"
+      queuetotop: no
+      label: tv-premiere
+    # This is a custom plugin, it is part of my rar-unpacking method, it changes
+    # 'movedone' based on the regexp in the key
+    #content_sort:
+    #  '*.rar': '/home/deluge/downloads/completed/tv_premieres/'
+
+
+  # If a premier was grabbed, keep on tracking it until the directory is (re)moved
+  tv-premieres-track:
+    import_series:
+      settings:
+        quality: 720p+
+      from:
+        listdir:
+          - "/media/SERIES/VIDEO/Series/NUEVAS/"
+    set:
+      movedone: >
+        /media/SERIES/VIDEO/Series/NUEVAS/{{ series_name|replace('/', '_')|replace(':', ' -') }}/{% if series_id_type == 'ep' %}T.{{ tvdb_season|default(series_season) }}/{% endif %}
+      queuetotop: no
+      label: tv-premiere-track
+    # This is a custom plugin, it is part of my rar-unpacking method, it changes
+    # 'movedone' based on the regexp in the key
+    #content_sort:
+    #  '*.rar': '/home/deluge/downloads/completed/tv_premieres/'
+
+
+  # This preset is a "global" preset for all movie-related tasks.
+  # We keep all of the RSS feeds that list movie-related torrents here
+  # as well as some other configurations.
+  movies-global:
+    #include: [ private/movies-global.yml ]
+    inputs:
+      - rss: { url: 'http://www.torlock.com/movies/rss.xml', silent: yes }     # TorLock (Movies)
+      - rss: { url: 'http://torrentz.eu/feed_verified?q=movies', silent: yes } # Torrentz (Verified Movies)
+      - rss: { url: 'http://rss.thepiratebay.is/207', silent: yes }            # The Pirate Bay (Highres - Movies)
+      - rss: { url: 'http://kat.ph/highres-movies/?rss=1', silent: yes }       # kat.ph (Highres - Movies)
+      - rss: { url: 'http://kat.ph/bookmarks/rss/personal/7e5c763d30fa00d696849918b32519fe/', silent: yes }       # kat.ph personal
+
+    # Some feeds might include TV Shows, ignore them
+    regexp:
+      reject:
+        - s\d+e\d+: {from: title}
+        - '\d{4}.\d{2}.\d{2}': {from: title}
+        - \d+x\d+: {from: title}
+        - \baac2: {from: title} # No 2 channel audio
+        - YIFI: {from: title}
+    # Force proper_movies to run after regexp to avoid unnecessary imdb_lookup
+    plugin_priority:
+      if: 173
+      proper_movies: 171
+    # Impose reasonable size constraints
+    content_size:
+      max: 20000
+      min: 1000
+    imdb_lookup: yes
+    # A Rotten Tomatoes API key is set in my private config, but I'm leaving
+    # this here for clarity and completeness.
+    #rottentomatoes_lookup: yes
+    seen_movies: strict # Don't download movies we've already seen
+    # Check for already downloaded or currently downloading movies
+    exists_movie:
+      - /media/PELICULAS/Peliculas
+      - /var/lib/deluged/
+    # Download propers, since they will have the same content_filename,
+    # lower/non-propers will be overwritten
+    proper_movies: yes
+    set:
+      # Give folders/files nice names
+      main_file_only: yes
+      movedone: "/media/PELICULAS/Peliculas/{{ imdb_name|replace('/', '_')|replace(':', ' -') }} ({{ imdb_year }})"
+      content_filename: |
+        {{ imdb_name|replace('/', '_')|replace(':', ' -') }} ({{ imdb_year }}) - {{ quality }}
+    # This is a custom plugin, it is part of my rar-unpacking method, it changes
+    # 'movedone' based on the regexp in the key
+    #content_sort:
+    #  '*.rar': '/home/deluge/downloads/completed/movies/'
+
+
+  # Keep all the discover settings in one place
+  #movies-discover:
+  #  #include: [ private/movies-discover.yml ]
+  #  discover:
+  #    from:
+  #      - flexget_archive: yes
+  #      - torrentz: verified
+  #      - piratebay:
+  #          category: "highres movies"
+  #          sort_by: seeds
+  #    type: movies
+
+
+  # This preset runs feeds through my very specific custom filter
+  movies-auto:
+    interval: 2 hours # run less often since we'll be manuall searching sites
+    #preset: movies-discover
+    imdb:
+      min_score: 6.5
+      min_votes: 5000
+      min_year: 2010
+      reject_genres:
+        - horror    
+    set:
+      queuetotop: no
+      label: movies-auto
+
+
+  # This preset uses the movie queue to find movies from various sources
+  movies-queued:
+    movie_queue: yes
+  #  preset: movies-discover
+  #  discover:
+  #    what:
+  #      - emit_movie_queue: yes
+  #  set:
+  #    label: my-movies
+
+
+# This is where we pull everything together
+tasks:
+
+  # All of the TV-related tasks pull in the tv-global preset, this gives
+  # all of the necessary rss sources and a few extra configs
+
+  # There are 3 My_TV Shows tasks, the first, tries to get the most wanted qualities
+  My_TV_Shows:
+    priority: 10
+    preset:
+      - tv-global
+      - tv-my_shows
+    series:
+      all_series:
+        - American Horror Story
+        - Castle
+        - Continuum
+        - Falling Skies
+        - Game Of Thrones
+        - Graceland
+        - Hawaii Five-0
+        - Homeland
+        - How I met your Mother
+        - New Girl
+        - Once upon a time
+        - Person Of Interest
+        - Ray Donovan
+        - Revolution
+        - Siberia
+        - The Big Bang Theory
+        - The Following
+        - The Walking Dead
+
+  # Task for the tv-premieres plugin
+  Series_Premieres:
+    priority: 40
+    preset:
+      - tv-global
+      - tv-premieres
+
+
+  # Task for the tv-premieres-track plugin
+  Series_Premieres_Track:
+    priority: 50
+    preset:
+      - tv-global
+      - tv-premieres-track
+
+
+  # This task queues all of the movies in my IMDB watchlist
+  IMDB_Movie_Queue:
+    priority: 100 # Always run before My_Movies task
+    preset: no_global # None of the global presets make sense here
+    interval: 2 hours # Only check every 2 hours (I have Flexget run every hour)
+    imdb_list:
+      username: XXXXXXXXXXXXX
+      password: AAAAAAAAAAAAA
+      user_id: AAAAAAAAAA
+      list: watchlist
+    accept_all: yes
+    queue_movies: { force: no } # Output entries to movie queue (with any quality)
+
+
+  # The next two tasks download the queue from the previous task effectively implementing
+  # a 2 day timeframe for 1080p movies, then falls back to 720p
+  My_Movies-1080p:
+    priority: 110
+    preset:
+      - movies-global
+    quality: 1080p webdl+ xvid+ dts|dd5.1|ac3
+
+
+  My_Movies-720p:
+    priority: 120
+    preset:
+      - movies-global
+      - movies-queued
+    quality: 720p+ webdl+ xvid+ !mp3
+    delay: 2 days # Wait 2 days for a 1080p movie before trying downloading 720p
+
+
+  # These task implement the movies-auto preset
+  Auto_Movies-1080p:
+    priority: 130
+    quality: 1080p+ webdl+ xvid+ dts|dd5.1|ac3
+    preset:
+      - movies-global
+      - movies-auto
+    set:
+      label: movies-auto
+
+  Auto_Movies-720p:
+    priority: 140
+    quality: 720p+ webdl+ xvid+ !mp3
+    preset:
+      - movies-global
+      - movies-auto
+    set:
+      label: movies-auto
+    delay: 4 days # Wait 4 days for a 1080p movie before trying downloading 720p
